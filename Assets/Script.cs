@@ -6,37 +6,26 @@ using System.Collections.Generic;
 
 public class Script : MonoBehaviour
 {
+	const uint BIT_ONE = (uint)1;
+
 	Toggle[] toggles;
-	int length;
-	uint bitMask;
+
 	bool sendCallback = true;
 
 	void Start()
 	{
-		bitMask = (uint)1;
-
 		toggles = GameObject.FindObjectsOfType<Toggle>();
+
 		foreach (var item in toggles)
 			item.onValueChanged.AddListener(GetToggleHandler(item));
 
 		System.Array.Sort(toggles, (lhs, rhs) => { return lhs.transform.GetSiblingIndex().CompareTo(rhs.transform.GetSiblingIndex()); });
-
-		length = toggles.Length;
 
 		if (Application.isWebPlayer)
 		{
 			Application.ExternalCall("Start", gameObject.name);
 			Application.ExternalCall("GetHash");
 		}
-
-		//int i = 3;
-		//BitArray b = new BitArray(new int[] { i });
-		//Debug.Log(b.Length);
-		//foreach (var item in b)
-		//	Debug.Log(item);
-
-		//string s = Convert.ToString(i, 2);
-		//Debug.LogError(s);
 	}
 
 	private UnityEngine.Events.UnityAction<bool> GetToggleHandler(Toggle item)
@@ -44,36 +33,13 @@ public class Script : MonoBehaviour
 		return new UnityEngine.Events.UnityAction<bool>((b) =>
 		{
 			if (sendCallback)
-			{
-				code = Encode();
-				Application.ExternalCall("PushState", code);
-			}
+				Application.ExternalCall("PushState", Encode());
 		});
 	}
 
 	void GetHash(string hash)
 	{
 		Decode(hash);
-	}
-
-	public bool DoEncode = false;
-	public bool DoDecode = false;
-	public string code;
-
-	void Update()
-	{
-		if (DoEncode)
-		{
-			DoEncode = false;
-			code = Encode();
-			Debug.Log(code);
-		}
-
-		if (DoDecode)
-		{
-			DoDecode = false;
-			Decode(code);
-		}
 	}
 
 	private void Decode(string hash)
@@ -90,7 +56,7 @@ public class Script : MonoBehaviour
 
 			for (int j = 0; j < 32; j++)
 			{
-				bit = bits & bitMask;
+				bit = bits & BIT_ONE;
 				bits = bits >> 1;
 
 				// i=0, j=0 => index = 31
@@ -98,7 +64,7 @@ public class Script : MonoBehaviour
 				// i=1, j=0 => index = 63
 				index = i * 32 + (32 - j - 1);
 
-				toggles[index].isOn = bit > 0;
+				toggles[index].isOn = bit == BIT_ONE;
 			}
 		}
 
@@ -108,15 +74,40 @@ public class Script : MonoBehaviour
 	private string Encode()
 	{
 		List<uint> list = new List<uint>();
-		for (int i = 0, index; i < length; i++)
+		for (int i = 0, index; i < toggles.Length; i++)
 		{
 			index = i / 32;
 			if (i % 32 == 0)
 				list.Add(0);
 
 			list[index] = list[index] << 1;
-			list[index] = list[index] | (uint)(toggles[i].isOn ? 1 : 0);
+
+			if (toggles[i].isOn)
+				list[index] = list[index] | BIT_ONE;
 		}
 		return string.Join(",", list.ConvertAll(d => d.ToString()).ToArray());
 	}
+
+#if UNITY_EDITOR
+	public bool DoEncode = false;
+	public bool DoDecode = false;
+
+	public string output;
+
+	void Update()
+	{
+		if (DoEncode)
+		{
+			DoEncode = false;
+			output = Encode();
+			Debug.Log(output);
+		}
+
+		if (DoDecode)
+		{
+			DoDecode = false;
+			Decode(output);
+		}
+	}
+#endif
 }
